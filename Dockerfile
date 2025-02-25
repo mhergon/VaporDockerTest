@@ -26,6 +26,12 @@ COPY . .
 # Construir la aplicación en modo release
 RUN swift build -c release --product App
 
+# Crear directorios staging para Resources y Public si existen
+RUN mkdir -p /staging/Public /staging/Resources
+# Intentar copiar contenido si existe (no falla si no existen)
+RUN if [ -d Public ]; then cp -R Public/* /staging/Public/ || true; fi
+RUN if [ -d Resources ]; then cp -R Resources/* /staging/Resources/ || true; fi
+
 # ===================================
 # Imagen de ejecución
 # ===================================
@@ -41,15 +47,16 @@ WORKDIR /app
 
 # Copiar el ejecutable compilado
 COPY --from=build /build/.build/release/App .
-# Copiar archivos públicos y recursos si existen
-COPY --from=build /build/Public ./Public
-COPY --from=build /build/Resources ./Resources
 
-# Configurar nginx (opcional, puedes añadir configuración personalizada)
-COPY --from=build /build/nginx.conf /etc/nginx/sites-available/default
+# Crear directorios para los recursos
+RUN mkdir -p ./Public ./Resources
+
+# Copiar directorios desde staging (ahora siempre existirán)
+COPY --from=build /staging/Public/ ./Public/
+COPY --from=build /staging/Resources/ ./Resources/
 
 # Exponer puerto
 EXPOSE 8080
 
-# Iniciar la aplicación
-CMD service nginx start && ./App serve --env production --hostname 0.0.0.0 --port 8080
+# Iniciar la aplicación (usando formato de array JSON para CMD)
+CMD ["sh", "-c", "service nginx start && ./App serve --env production --hostname 0.0.0.0 --port 8080"]
